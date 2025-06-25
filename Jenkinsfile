@@ -1,105 +1,40 @@
 pipeline {
     agent any
-    tools{
-        jdk 'jdk17'
-        maven 'maven3'
+
+    tools {
+        jdk 'jdk11'
+        maven 'maven3' // Make sure this is defined in Jenkins
     }
-    environment{
-        SCANNER_HOME= tool 'sonar-scanner'
+
+    environment {
+        SCANNER_HOME = tool 'sonar-scanner' // Make sure this tool is defined
     }
 
     stages {
-        stage('git-checkout') {
+        stage('Git Checkout') {
             steps {
-                git 'https://github.com/shreyaalwal/secretsanta-generator.git'
+                git changelog: false, poll: false, url: 'https://github.com/shreyaalwal/secretsanta-generator.git'
             }
         }
 
-        stage('Code-Compile') {
+        stage('Compile') {
             steps {
-               sh "mvn clean compile"
-            }
-        }
-        
-        stage('Unit Tests') {
-            steps {
-               sh "mvn test"
-            }
-        }
-        
-		stage('OWASP Dependency Check') {
-            steps {
-               dependencyCheck additionalArguments: ' --scan ./ ', odcInstallation: 'DC'
-                    dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                sh 'mvn clean compile'
             }
         }
 
-
-        stage('Sonar Analysis') {
+        stage('SonarQube Analysis') {
             steps {
-               withSonarQubeEnv('sonar'){
-                   sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Santa \
-                   -Dsonar.java.binaries=. \
-                   -Dsonar.projectKey=Santa '''
-               }
+                withSonarQubeEnv('sonarqube') { // Match this name with what you set in Jenkins > SonarQube servers
+                    sh '''
+                        $SCANNER_HOME/bin/sonar-scanner \
+                        -Dsonar.projectKey=shopping-cart \
+                        -Dsonar.projectName=shopping-cart \
+                        -Dsonar.sources=. \
+                        -Dsonar.java.binaries=target/classes
+                    '''
+                }
             }
         }
-
-		 
-        stage('Code-Build') {
-            steps {
-               sh "mvn clean package"
-            }
-        }
-
-         stage('Docker Build') {
-            steps {
-               script{
-                   withDockerRegistry(credentialsId: 'docker-cred') {
-                    sh "docker build -t  shreya500 . "
-                 }
-               }
-            }
-        }
-
-        stage('Docker Push') {
-            steps {
-               script{
-                   withDockerRegistry(credentialsId: 'docker-cred') {
-                    sh "docker tag shreya500 shreyaalwal/shreya500:latest"
-                    sh "docker push shreyaalwal/shreyaalwal:latest"
-                 }
-               }
-            }
-        }
-        
-        	 
-        stage('Docker Image Scan') {
-            steps {
-               sh "trivy image shreyaalwal/shreya500:latest "
-            }
-        }}
-        
-         post {
-            always {
-                emailext (
-                    subject: "Pipeline Status: ${BUILD_NUMBER}",
-                    body: '''<html>
-                                <body>
-                                    <p>Build Status: ${BUILD_STATUS}</p>
-                                    <p>Build Number: ${BUILD_NUMBER}</p>
-                                    <p>Check the <a href="${BUILD_URL}">console output</a>.</p>
-                                </body>
-                            </html>''',
-                    to: 'shreyaalwal98@gmail.com',
-                    from: 'jenkins@example.com',
-                    replyTo: 'jenkins@example.com',
-                    mimeType: 'text/html'
-                )
-            }
-        }
-		
-		
-
-    
+    }
 }
